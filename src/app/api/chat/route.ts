@@ -17,6 +17,7 @@ interface ChatRequest {
   taigaToken: string;
   taigaUrl: string;
   sessionId?: string;
+  model?: string;
   user: {
     id: number;
     username: string;
@@ -975,6 +976,7 @@ export async function POST(request: NextRequest) {
       taigaUrl,
       sessionId,
       user,
+      model,
     } = body;
 
     if (!taigaToken) {
@@ -1016,7 +1018,7 @@ export async function POST(request: NextRequest) {
     // Crear sesión con streaming habilitado
     const session = await copilotClient.createSession({
       sessionId: sessionId || `taiga-${Date.now()}`,
-      model: "gpt-4o",
+      model: model || "gpt-4o",
       streaming: true,
       tools,
       systemMessage: {
