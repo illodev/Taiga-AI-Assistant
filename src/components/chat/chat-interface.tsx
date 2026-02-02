@@ -190,7 +190,9 @@ function SessionItem({
         </div>
       ) : (
         <>
-          <div className="flex-1 text-sm truncate grow">{session.title}</div>
+          <div className="flex-1 text-xs font-medium truncate grow">
+            {session.title}
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -502,7 +504,6 @@ export function ChatInterface() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <Bot className="h-12 w-12 text-primary animate-pulse" />
           <p className="text-muted-foreground">Cargando...</p>
         </div>
       </div>
