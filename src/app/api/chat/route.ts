@@ -17,13 +17,32 @@ interface ChatRequest {
   taigaToken: string;
   taigaUrl: string;
   sessionId?: string;
+  user: {
+    id: number;
+    username: string;
+    full_name: string;
+    email: string;
+    photo: string | null;
+  } | null;
 }
 
 // ============================================
 // System Prompt
 // ============================================
 
-const SYSTEM_PROMPT = `Eres un asistente experto en gestión de proyectos que ayuda a los usuarios a interactuar con Taiga, una plataforma de gestión ágil de proyectos.
+const createSystemPrompt = (
+  user: ChatRequest["user"],
+) => `Eres un asistente experto en gestión de proyectos que ayuda a los usuarios a interactuar con Taiga, una plataforma de gestión ágil de proyectos.
+
+${
+  user
+    ? `El usuario autenticado es:
+- ID: ${user.id}
+- Nombre de usuario: ${user.username}
+- Nombre completo: ${user.full_name}
+- Email: ${user.email}`
+    : `El usuario no está autenticado. Solo puedes proporcionar información pública o pedirle que inicie sesión.`
+}
 
 Tu rol es:
 1. Interpretar las solicitudes del usuario en lenguaje natural
@@ -950,7 +969,13 @@ export async function POST(request: NextRequest) {
   try {
     // Parsear request
     const body: ChatRequest = await request.json();
-    const { messages: userMessages, taigaToken, taigaUrl, sessionId } = body;
+    const {
+      messages: userMessages,
+      taigaToken,
+      taigaUrl,
+      sessionId,
+      user,
+    } = body;
 
     if (!taigaToken) {
       return NextResponse.json(
@@ -996,7 +1021,7 @@ export async function POST(request: NextRequest) {
       tools,
       systemMessage: {
         mode: "replace",
-        content: SYSTEM_PROMPT,
+        content: createSystemPrompt(user),
       },
     });
 
