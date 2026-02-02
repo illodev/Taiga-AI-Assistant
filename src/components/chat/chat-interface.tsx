@@ -260,7 +260,7 @@ export function ChatInterface() {
   // Mensajes actuales
   const messages = activeSession?.messages || [];
 
-  // Enviar mensaje
+  // Enviar mensaje con streaming
   const handleSendMessage = async (content: string) => {
     // Agregar mensaje del usuario
     addMessage({
@@ -301,17 +301,80 @@ export function ChatInterface() {
         }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || "Error al procesar el mensaje");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Error al procesar el mensaje");
       }
 
-      // Actualizar mensaje del asistente
-      updateMessage(assistantMsg.id, {
-        content: data.message,
-        isLoading: false,
-      });
+      // Verificar si es una respuesta de streaming
+      const contentType = response.headers.get("content-type");
+      if (contentType?.includes("text/event-stream")) {
+        // Procesar stream
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let accumulatedContent = "";
+
+        if (!reader) {
+          throw new Error("No se pudo obtener el stream de respuesta");
+        }
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n");
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+
+                if (data.error) {
+                  throw new Error(data.error);
+                }
+
+                if (data.content) {
+                  accumulatedContent += data.content;
+                  // Actualizar mensaje en tiempo real
+                  updateMessage(assistantMsg.id, {
+                    content: accumulatedContent,
+                    isLoading: true,
+                  });
+                }
+
+                if (data.done) {
+                  // Finalizar mensaje
+                  updateMessage(assistantMsg.id, {
+                    content:
+                      accumulatedContent || "No se pudo obtener una respuesta.",
+                    isLoading: false,
+                  });
+                }
+              } catch (parseError) {
+                // Ignorar errores de parseo de líneas incompletas
+                if (parseError instanceof SyntaxError) continue;
+                throw parseError;
+              }
+            }
+          }
+        }
+
+        // Asegurar que el mensaje se marca como completado
+        if (accumulatedContent) {
+          updateMessage(assistantMsg.id, {
+            content: accumulatedContent,
+            isLoading: false,
+          });
+        }
+      } else {
+        // Respuesta tradicional JSON (fallback)
+        const data = await response.json();
+        updateMessage(assistantMsg.id, {
+          content: data.message,
+          isLoading: false,
+        });
+      }
     } catch (error) {
       // Mostrar error en el mensaje del asistente
       updateMessage(assistantMsg.id, {
@@ -479,7 +542,7 @@ export function ChatInterface() {
         </header>
 
         {/* Área de mensajes */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 px-4 sm:px-6 lg:px-8 py-12">
           {messages.length === 0 ? (
             // Estado vacío
             <div className="flex flex-col items-center justify-center h-full p-8 text-center">
@@ -507,7 +570,7 @@ export function ChatInterface() {
             </div>
           ) : (
             // Lista de mensajes
-            <div className="divide-y">
+            <div className="max-w-6xl mx-auto w-full space-y-4">
               {messages.map((message) => (
                 <ChatMessage key={message.id} message={message} />
               ))}

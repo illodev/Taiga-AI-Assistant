@@ -62,8 +62,8 @@ export function ChatInput({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="relative">
-      <div className="flex items-end gap-2 p-4 border-t bg-background">
+    <form onSubmit={handleSubmit} className="relative max-w-3xl mx-auto w-full">
+      <div className="flex items-center gap-2 p-4 bg-background">
         <div className="relative flex-1">
           <textarea
             ref={textareaRef}
@@ -82,7 +82,6 @@ export function ChatInput({
             )}
           />
         </div>
-
         <Button
           type="submit"
           size="icon"
