@@ -54,7 +54,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
           <span className="text-sm font-medium">
             {isUser ? "Tú" : "Asistente"}
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {message.timestamp.toLocaleTimeString("es-ES", {
               hour: "2-digit",
               minute: "2-digit",

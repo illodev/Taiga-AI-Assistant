@@ -97,7 +97,7 @@ export function ChatInput({
         </Button>
       </div>
 
-      <div className="px-4 pb-2 text-xs text-muted-foreground text-center">
+      <div className="px-4 pb-2 text-sm text-muted-foreground text-center">
         <kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">Enter</kbd>{" "}
         para enviar •{" "}
         <kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">

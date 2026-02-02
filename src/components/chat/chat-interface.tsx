@@ -25,11 +25,17 @@ import {
   StopCircleIcon,
   ThumbsUpIcon,
   ThumbsDownIcon,
+  EditIcon,
+  ChevronsUpDown,
+  Bell,
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
@@ -67,6 +73,7 @@ import {
   ReasoningContent,
   ReasoningTrigger,
 } from "../ai-elements/reasoning";
+import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
 
 // ============================================
 // Ejemplos de prompts
@@ -79,6 +86,8 @@ const EXAMPLE_PROMPTS = [
   "Crea una historia de usuario para...",
   "¿Cuántas tareas quedan pendientes?",
   "Dame un resumen del proyecto",
+  "Dame estadísticas de mis tareas asignadas",
+  "¿Qué tareas vencen esta semana?",
 ];
 
 // ============================================
@@ -133,7 +142,7 @@ function SessionItem({
     <div
       className={`
         group flex items-center gap-2 p-2 rounded-md w-full cursor-pointer transition-colors
-        ${isActive ? "bg-primary/10 text-primary" : "hover:bg-muted"}
+        ${isActive ? "bg-primary/5 text-primary" : "hover:bg-muted"}
       `}
       onClick={() => !isEditing && onSelect()}
     >
@@ -182,7 +191,7 @@ function SessionItem({
                   setIsEditing(true);
                 }}
               >
-                <Pencil className="h-4 w-4 mr-2" />
+                <Pencil />
                 Renombrar
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -192,7 +201,7 @@ function SessionItem({
                 }}
                 className="text-destructive focus:text-destructive"
               >
-                <Trash2 className="h-4 w-4 mr-2" />
+                <Trash2 />
                 Eliminar
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -409,6 +418,7 @@ export function ChatInterface() {
       taigaToken: token,
       taigaUrl: taigaUrl,
       sessionId: activeSessionId,
+      user,
     },
     onFinish: (assistantMessage) => {
       // Persistir mensajes cuando termina el streaming
@@ -516,14 +526,14 @@ export function ChatInterface() {
       {/* Sidebar */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 w-72 bg-card border-r transform transition-transform duration-200 ease-in-out
+          fixed inset-y-0 left-0 z-50 w-72 bg-muted/50 transform transition-transform duration-200 ease-in-out
           lg:relative lg:translate-x-0
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
         `}
       >
         <div className="flex flex-col h-full">
           {/* Header del sidebar */}
-          <div className="p-4 border-b">
+          <div className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Bot className="h-6 w-6 text-primary" />
@@ -543,17 +553,17 @@ export function ChatInterface() {
           {/* Botón nueva conversación */}
           <div className="p-4">
             <Button
-              variant="default"
+              variant="ghost"
               className="w-full justify-start"
               onClick={handleNewChat}
             >
-              <Plus className="h-4 w-4 mr-2" />
+              <EditIcon className="-ml-2" />
               Nueva conversación
             </Button>
           </div>
 
           {/* Lista de sesiones */}
-          <div className="flex-1 px-4 w-full overflow-auto">
+          <div className="flex-1 px-4 w-full overflow-auto style-scrollbar">
             {groupedSessions.length === 0 ? (
               <div className="text-center py-8">
                 <MessageSquare className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
@@ -590,39 +600,68 @@ export function ChatInterface() {
               </div>
             )}
           </div>
-
           {/* Usuario */}
           {user && (
-            <div className="p-4 border-t">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-medium text-primary">
-                    {user.full_name?.charAt(0) || user.username.charAt(0)}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {user.full_name || user.username}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {user.email}
-                  </p>
-                </div>
-              </div>
+            <div className="p-4">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="lg" variant="ghost" className="h-14 px-2">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage
+                        src={user.photo ?? undefined}
+                        alt={
+                          user.full_name?.charAt(0) || user.username.charAt(0)
+                        }
+                      />
+                      <AvatarFallback className="rounded-lg">
+                        {user.full_name?.charAt(0) || user.username.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-medium">
+                        {user.full_name || user.username}
+                      </span>
+                      <span className="truncate text-xs">{user.email}</span>
+                    </div>
+                    <ChevronsUpDown className="ml-auto size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  className="w-(--radix-dropdown-menu-trigger-width) min-w-56"
+                  side="top"
+                  align="end"
+                  sideOffset={4}
+                >
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex items-center gap-2 text-left text-sm">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage
+                          src={user.photo ?? undefined}
+                          alt={
+                            user.full_name?.charAt(0) || user.username.charAt(0)
+                          }
+                        />
+                        <AvatarFallback className="rounded-lg">
+                          CN
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="grid flex-1 text-left text-sm leading-tight">
+                        <span className="truncate font-medium">
+                          {user.full_name || user.username}
+                        </span>
+                        <span className="truncate text-xs">{user.email}</span>
+                      </div>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout}>
+                    <LogOut />
+                    Cerrar sesión
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
-
-          {/* Footer del sidebar */}
-          <div className="p-4 border-t">
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-muted-foreground hover:text-foreground"
-              onClick={logout}
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Cerrar sesión
-            </Button>
-          </div>
         </div>
       </aside>
 
@@ -663,8 +702,8 @@ export function ChatInterface() {
                 title="¡Hola! Soy tu asistente de Taiga"
                 description="Puedo ayudarte a gestionar tus proyectos, historias de usuario, tareas y sprints usando lenguaje natural."
               >
-                <div className="mt-6 space-y-4">
-                  <Suggestions className="flex flex-col sm:flex-row gap-3 justify-center">
+                <div className="mt-6 space-y-4 w-full">
+                  <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center">
                     {EXAMPLE_PROMPTS.map((prompt, index) => (
                       <Suggestion
                         key={index}
@@ -672,7 +711,7 @@ export function ChatInterface() {
                         onClick={handleSuggestionClick}
                       />
                     ))}
-                  </Suggestions>
+                  </div>
                 </div>
               </ConversationEmptyState>
             ) : (
@@ -693,7 +732,7 @@ export function ChatInterface() {
 
                 {/* Indicador de carga cuando se envía pero aún no hay respuesta */}
                 {status === "submitted" && (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Spinner className="h-4 w-4" />
                     <span className="text-sm">
                       Cargando recursos y artefactos de Taiga...
