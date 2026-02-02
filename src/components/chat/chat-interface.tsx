@@ -4,10 +4,10 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/auth-provider";
 import { LoginForm } from "@/components/auth/login-form";
-import { ChatMessage } from "./chat-message";
-import { ChatInput } from "./chat-input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useChatStorage, type ChatSession } from "@/hooks/use-chat-storage";
+import { useChat, type UIMessage, type ToolCallPart } from "@/hooks/use-chat";
+import { Input } from "@/components/ui/input";
 import {
   Bot,
   LogOut,
@@ -20,6 +20,11 @@ import {
   Pencil,
   Trash2,
   Check,
+  RefreshCwIcon,
+  CopyIcon,
+  StopCircleIcon,
+  ThumbsUpIcon,
+  ThumbsDownIcon,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -27,7 +32,41 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
+
+// AI Elements
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+  MessageActions,
+  MessageAction,
+} from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  PromptInputTextarea,
+  PromptInputFooter,
+  PromptInputSubmit,
+} from "@/components/ai-elements/prompt-input";
+import {
+  Tool,
+  ToolHeader,
+  ToolContent,
+  ToolInput,
+  ToolOutput,
+} from "@/components/ai-elements/tool";
+import { Suggestions, Suggestion } from "@/components/ai-elements/suggestion";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "../ai-elements/reasoning";
 
 // ============================================
 // Ejemplos de prompts
@@ -93,13 +132,12 @@ function SessionItem({
   return (
     <div
       className={`
-        group flex items-center gap-2 p-2 rounded-md cursor-pointer transition-colors
+        group flex items-center gap-2 p-2 rounded-md w-full cursor-pointer transition-colors
         ${isActive ? "bg-primary/10 text-primary" : "hover:bg-muted"}
       `}
       onClick={() => !isEditing && onSelect()}
     >
-      <MessageSquare className="h-4 w-4 shrink-0" />
-
+      <MessageSquare className="h-4 w-4 flex-none" />
       {isEditing ? (
         <div className="flex-1 flex items-center gap-1">
           <Input
@@ -125,13 +163,13 @@ function SessionItem({
         </div>
       ) : (
         <>
-          <span className="flex-1 text-sm truncate">{session.title}</span>
+          <div className="flex-1 text-sm truncate grow">{session.title}</div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="h-6 w-6 opacity-0 flex-none group-hover:opacity-100 transition-opacity"
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreHorizontal className="h-3 w-3" />
@@ -166,6 +204,123 @@ function SessionItem({
 }
 
 // ============================================
+// Componente de mensaje del chat
+// ============================================
+
+interface ChatMessageItemProps {
+  message: UIMessage;
+  isLastAssistantMessage: boolean;
+  isStreaming: boolean;
+  onReload?: () => void;
+  onStop?: () => void;
+  onCopy?: (content: string) => void;
+}
+
+function ChatMessageItem({
+  message,
+  isLastAssistantMessage,
+  isStreaming,
+  onReload,
+  onStop,
+  onCopy,
+}: ChatMessageItemProps) {
+  const isAssistant = message.role === "assistant";
+
+  return (
+    <Message from={message.role}>
+      <MessageContent className="group-[.is-assistant]:w-full space-y-6">
+        {message.parts.map((part, i) => {
+          switch (part.type) {
+            case "text":
+              return part.text ? (
+                <MessageResponse key={`${message.id}-${i}`}>
+                  {part.text}
+                </MessageResponse>
+              ) : null;
+
+            case "reasoning":
+              return (
+                <Reasoning
+                  key={`${message.id}-${i}`}
+                  className="w-full"
+                  isStreaming={isStreaming}
+                >
+                  <ReasoningTrigger />
+                  <ReasoningContent>{part.text}</ReasoningContent>
+                </Reasoning>
+              );
+
+            default:
+              // Tool call
+              if (part.type.startsWith("tool-")) {
+                const toolPart = part as ToolCallPart;
+
+                return (
+                  <Tool key={`${message.id}-${i}`}>
+                    <ToolHeader
+                      type={toolPart.type as `tool-${string}`}
+                      state={toolPart.state}
+                      title={formatToolName(toolPart.toolName)}
+                    />
+                    <ToolContent>
+                      <ToolInput input={toolPart.input} />
+                      {(toolPart.output || toolPart.errorText) && (
+                        <ToolOutput
+                          output={toolPart.output}
+                          errorText={toolPart.errorText}
+                        />
+                      )}
+                    </ToolContent>
+                  </Tool>
+                );
+              }
+              return null;
+          }
+        })}
+
+        {/* Spinner mientras está en streaming sin contenido */}
+        {/* {isAssistant &&
+          isStreaming &&
+          message.parts.length === 0 &&
+          !message.content && <Spinner className="h-5 w-5" />} */}
+      </MessageContent>
+
+      {/* Acciones del mensaje */}
+      {isAssistant && isLastAssistantMessage && message.content && (
+        <MessageActions className="mt-2">
+          {isStreaming ? null : (
+            <>
+              <MessageAction
+                onClick={onReload}
+                tooltip="Regenerar"
+                label="Regenerar respuesta"
+              >
+                <RefreshCwIcon className="size-3" />
+              </MessageAction>
+              <MessageAction
+                onClick={() => onCopy?.(message.content)}
+                tooltip="Copiar"
+                label="Copiar respuesta"
+              >
+                <CopyIcon className="size-3" />
+              </MessageAction>
+            </>
+          )}
+        </MessageActions>
+      )}
+    </Message>
+  );
+}
+
+// ============================================
+// Utilidades
+// ============================================
+
+function formatToolName(toolName: string): string {
+  return toolName.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+}
+
+// ============================================
 // Componente principal
 // ============================================
 
@@ -187,16 +342,15 @@ export function ChatInterface() {
     createSession,
     selectSession,
     deleteSession,
-    addMessage,
-    updateMessage,
+    addMessage: addStoredMessage,
+    updateMessage: updateStoredMessage,
     renameSession,
   } = useChatStorage();
 
-  const [isLoading, setIsLoading] = React.useState(false);
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
-  const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  const [inputValue, setInputValue] = React.useState("");
 
-  // Agrupar sesiones por fecha - debe estar antes de cualquier return condicional
+  // Agrupar sesiones por fecha
   const groupedSessions = React.useMemo(() => {
     const groups: { label: string; sessions: ChatSession[] }[] = [];
     const today: ChatSession[] = [];
@@ -235,12 +389,80 @@ export function ChatInterface() {
     return groups;
   }, [sessions]);
 
-  // Scroll al final cuando hay nuevos mensajes
-  React.useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeSession?.messages]);
+  // Ref para rastrear el último input del usuario (para guardar después)
+  const lastUserInputRef = React.useRef<string>("");
+  // Ref para evitar re-sincronización - guarda el sessionId que ya fue sincronizado
+  const syncedSessionIdRef = React.useRef<string | null>(null);
 
-  // Mostrar loading mientras se carga la autenticación o el storage
+  // Hook de chat personalizado
+  const {
+    messages,
+    setMessages,
+    sendMessage,
+    status,
+    isLoading,
+    stop,
+    reload,
+  } = useChat({
+    api: "/api/chat",
+    body: {
+      taigaToken: token,
+      taigaUrl: taigaUrl,
+      sessionId: activeSessionId,
+    },
+    onFinish: (assistantMessage) => {
+      // Persistir mensajes cuando termina el streaming
+      // Guardar el mensaje del usuario
+      if (lastUserInputRef.current) {
+        addStoredMessage({
+          role: "user",
+          content: lastUserInputRef.current,
+          parts: [{ type: "text", text: lastUserInputRef.current }],
+        });
+        lastUserInputRef.current = "";
+      }
+      // Guardar el mensaje del asistente con todas las partes (reasoning, tools, text)
+      if (assistantMessage.content || assistantMessage.parts.length > 0) {
+        addStoredMessage({
+          role: "assistant",
+          content: assistantMessage.content,
+          parts: assistantMessage.parts,
+        });
+      }
+    },
+  });
+
+  // Sincronizar mensajes SOLO cuando el usuario cambia de sesión activa
+  // No sincronizar cuando se actualiza la misma sesión (ej: al guardar mensajes)
+  React.useEffect(() => {
+    // Si ya sincronizamos esta sesión, no volver a hacerlo
+    if (syncedSessionIdRef.current === activeSessionId) {
+      return;
+    }
+
+    // Marcar esta sesión como sincronizada
+    syncedSessionIdRef.current = activeSessionId;
+
+    if (activeSession) {
+      // Convertir mensajes de storage a formato del hook (incluyendo partes)
+      const convertedMessages: UIMessage[] = activeSession.messages.map(
+        (m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          parts: m.parts || [{ type: "text" as const, text: m.content }],
+          createdAt: m.timestamp,
+        }),
+      );
+      setMessages(convertedMessages);
+    } else {
+      setMessages([]);
+    }
+    // Solo depende de activeSessionId para evitar re-sincronización cuando activeSession cambia su contenido
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSessionId]);
+
+  // Mostrar loading mientras se carga
   if (authLoading || !isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -257,146 +479,37 @@ export function ChatInterface() {
     return <LoginForm />;
   }
 
-  // Mensajes actuales
-  const messages = activeSession?.messages || [];
-
-  // Enviar mensaje con streaming
-  const handleSendMessage = async (content: string) => {
-    // Agregar mensaje del usuario
-    addMessage({
-      role: "user",
-      content,
-    });
-
-    // Mensaje placeholder del asistente
-    const assistantMsg = addMessage({
-      role: "assistant",
-      content: "",
-      isLoading: true,
-    });
-
-    setIsLoading(true);
-
-    try {
-      // Preparar historial de mensajes para la API (sin el placeholder)
-      const currentMessages = activeSession?.messages || [];
-      const messageHistory = [
-        ...currentMessages
-          .filter((m) => !m.isError && !m.isLoading && m.id !== assistantMsg.id)
-          .map((m) => ({
-            role: m.role as "user" | "assistant",
-            content: m.content,
-          })),
-        { role: "user" as const, content },
-      ];
-
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: messageHistory,
-          taigaToken: token,
-          taigaUrl: taigaUrl,
-          sessionId: activeSessionId,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Error al procesar el mensaje");
-      }
-
-      // Verificar si es una respuesta de streaming
-      const contentType = response.headers.get("content-type");
-      if (contentType?.includes("text/event-stream")) {
-        // Procesar stream
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        let accumulatedContent = "";
-
-        if (!reader) {
-          throw new Error("No se pudo obtener el stream de respuesta");
-        }
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\n");
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-
-                if (data.error) {
-                  throw new Error(data.error);
-                }
-
-                if (data.content) {
-                  accumulatedContent += data.content;
-                  // Actualizar mensaje en tiempo real
-                  updateMessage(assistantMsg.id, {
-                    content: accumulatedContent,
-                    isLoading: true,
-                  });
-                }
-
-                if (data.done) {
-                  // Finalizar mensaje
-                  updateMessage(assistantMsg.id, {
-                    content:
-                      accumulatedContent || "No se pudo obtener una respuesta.",
-                    isLoading: false,
-                  });
-                }
-              } catch (parseError) {
-                // Ignorar errores de parseo de líneas incompletas
-                if (parseError instanceof SyntaxError) continue;
-                throw parseError;
-              }
-            }
-          }
-        }
-
-        // Asegurar que el mensaje se marca como completado
-        if (accumulatedContent) {
-          updateMessage(assistantMsg.id, {
-            content: accumulatedContent,
-            isLoading: false,
-          });
-        }
-      } else {
-        // Respuesta tradicional JSON (fallback)
-        const data = await response.json();
-        updateMessage(assistantMsg.id, {
-          content: data.message,
-          isLoading: false,
-        });
-      }
-    } catch (error) {
-      // Mostrar error en el mensaje del asistente
-      updateMessage(assistantMsg.id, {
-        content: error instanceof Error ? error.message : "Error desconocido",
-        isLoading: false,
-        isError: true,
-      });
-    } finally {
-      setIsLoading(false);
-    }
+  // Handlers
+  const handleSendMessage = (text: string) => {
+    if (!text.trim()) return;
+    // Guardar el input para persistirlo después en onFinish
+    lastUserInputRef.current = text.trim();
+    sendMessage({ text });
+    setInputValue("");
   };
 
-  // Crear nueva conversación
+  const handleSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    handleSendMessage(inputValue);
+  };
+
   const handleNewChat = () => {
     createSession();
     setSidebarOpen(false);
   };
 
-  // Usar prompt de ejemplo
-  const handleExampleClick = (prompt: string) => {
-    handleSendMessage(prompt);
+  const handleSuggestionClick = (suggestion: string) => {
+    handleSendMessage(suggestion);
   };
+
+  const handleCopy = (content: string) => {
+    navigator.clipboard.writeText(content);
+  };
+
+  // Determinar último mensaje del asistente
+  const lastAssistantMessageIndex = messages.findLastIndex(
+    (m) => m.role === "assistant",
+  );
 
   return (
     <div className="flex h-screen bg-background">
@@ -427,31 +540,10 @@ export function ChatInterface() {
             </div>
           </div>
 
-          {/* Usuario */}
-          {user && (
-            <div className="p-4 border-b">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-medium text-primary">
-                    {user.full_name?.charAt(0) || user.username.charAt(0)}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {user.full_name || user.username}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">
-                    {user.email}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Botón nueva conversación */}
           <div className="p-4">
             <Button
-              variant="outline"
+              variant="default"
               className="w-full justify-start"
               onClick={handleNewChat}
             >
@@ -461,7 +553,7 @@ export function ChatInterface() {
           </div>
 
           {/* Lista de sesiones */}
-          <ScrollArea className="flex-1 px-4">
+          <div className="flex-1 px-4 w-full overflow-auto">
             {groupedSessions.length === 0 ? (
               <div className="text-center py-8">
                 <MessageSquare className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
@@ -497,7 +589,28 @@ export function ChatInterface() {
                 ))}
               </div>
             )}
-          </ScrollArea>
+          </div>
+
+          {/* Usuario */}
+          {user && (
+            <div className="p-4 border-t">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-sm font-medium text-primary">
+                    {user.full_name?.charAt(0) || user.username.charAt(0)}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {user.full_name || user.username}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {user.email}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Footer del sidebar */}
           <div className="p-4 border-t">
@@ -541,50 +654,82 @@ export function ChatInterface() {
           </Button>
         </header>
 
-        {/* Área de mensajes */}
-        <ScrollArea className="flex-1 px-4 sm:px-6 lg:px-8 py-12">
-          {messages.length === 0 ? (
-            // Estado vacío
-            <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-              <div className="w-16 h-16 mb-4 rounded-full bg-primary/10 flex items-center justify-center">
-                <Sparkles className="h-8 w-8 text-primary" />
-              </div>
-              <h2 className="text-xl font-semibold mb-2">
-                ¡Hola! Soy tu asistente de Taiga
-              </h2>
-              <p className="text-muted-foreground max-w-md mb-6">
-                Puedo ayudarte a gestionar tus proyectos, historias de usuario,
-                tareas y sprints usando lenguaje natural.
-              </p>
-              <div className="grid gap-2 sm:grid-cols-2 max-w-lg">
-                {EXAMPLE_PROMPTS.slice(0, 4).map((prompt, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleExampleClick(prompt)}
-                    className="text-left text-sm p-3 rounded-lg border hover:bg-muted transition-colors"
-                  >
-                    {prompt}
-                  </button>
+        {/* Área de mensajes con componentes de AI Elements */}
+        <Conversation className="flex-1">
+          <ConversationContent className="max-w-3xl mx-auto w-full py-16">
+            {messages.length === 0 ? (
+              <ConversationEmptyState
+                icon={<Sparkles className="size-12" />}
+                title="¡Hola! Soy tu asistente de Taiga"
+                description="Puedo ayudarte a gestionar tus proyectos, historias de usuario, tareas y sprints usando lenguaje natural."
+              >
+                <div className="mt-6 space-y-4">
+                  <Suggestions className="flex flex-col sm:flex-row gap-3 justify-center">
+                    {EXAMPLE_PROMPTS.map((prompt, index) => (
+                      <Suggestion
+                        key={index}
+                        suggestion={prompt}
+                        onClick={handleSuggestionClick}
+                      />
+                    ))}
+                  </Suggestions>
+                </div>
+              </ConversationEmptyState>
+            ) : (
+              <>
+                {messages.map((message, index) => (
+                  <ChatMessageItem
+                    key={message.id}
+                    message={message}
+                    isLastAssistantMessage={index === lastAssistantMessageIndex}
+                    isStreaming={
+                      isLoading && index === lastAssistantMessageIndex
+                    }
+                    onReload={reload}
+                    onStop={stop}
+                    onCopy={handleCopy}
+                  />
                 ))}
-              </div>
-            </div>
-          ) : (
-            // Lista de mensajes
-            <div className="max-w-6xl mx-auto w-full space-y-4">
-              {messages.map((message) => (
-                <ChatMessage key={message.id} message={message} />
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
-        </ScrollArea>
 
-        {/* Input */}
-        <ChatInput
-          onSend={handleSendMessage}
-          isLoading={isLoading}
-          placeholder="Pregúntame sobre tus proyectos en Taiga..."
-        />
+                {/* Indicador de carga cuando se envía pero aún no hay respuesta */}
+                {status === "submitted" && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Spinner className="h-4 w-4" />
+                    <span className="text-sm">
+                      Cargando recursos y artefactos de Taiga...
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+          </ConversationContent>
+          <ConversationScrollButton />
+        </Conversation>
+
+        {/* Input con componentes de AI Elements */}
+        <div className="p-4">
+          <PromptInput
+            onSubmit={(msg) => handleSendMessage(msg.text || "")}
+            className="max-w-4xl mx-auto"
+          >
+            <PromptInputTextarea
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder="Pregúntame sobre tus proyectos en Taiga..."
+              className="min-h-13"
+            />
+            <PromptInputFooter>
+              <div className="flex-1" />
+              <PromptInputSubmit
+                status={status === "streaming" ? "streaming" : "ready"}
+                disabled={!inputValue.trim() && status !== "streaming"}
+              />
+            </PromptInputFooter>
+          </PromptInput>
+          <p className="text-xs text-muted-foreground text-center mt-2">
+            Taiga AI puede cometer errores. Verifica la información importante.
+          </p>
+        </div>
       </main>
     </div>
   );
