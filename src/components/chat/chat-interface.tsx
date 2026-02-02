@@ -67,6 +67,23 @@ import {
   ToolOutput,
 } from "@/components/ai-elements/tool";
 import { Suggestions, Suggestion } from "@/components/ai-elements/suggestion";
+import {
+  ModelSelector,
+  ModelSelectorTrigger,
+  ModelSelectorContent,
+  ModelSelectorInput,
+  ModelSelectorList,
+  ModelSelectorEmpty,
+  ModelSelectorGroup,
+  ModelSelectorItem,
+  ModelSelectorLogo,
+  ModelSelectorName,
+  DEFAULT_MODELS,
+  DEFAULT_MODEL,
+  getModelsByProvider,
+  type Model,
+  ModelSelectorSeparator,
+} from "@/components/ai-elements/model-selector";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Reasoning,
@@ -74,6 +91,7 @@ import {
   ReasoningTrigger,
 } from "../ai-elements/reasoning";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
+import Image from "next/image";
 
 // ============================================
 // Ejemplos de prompts
@@ -141,7 +159,7 @@ function SessionItem({
   return (
     <div
       className={`
-        group flex items-center gap-2 p-2 rounded-md w-full cursor-pointer transition-colors
+        group flex items-center gap-2 p-2 px-4 rounded-md w-full cursor-pointer transition-colors
         ${isActive ? "bg-primary/5 text-primary" : "hover:bg-muted"}
       `}
       onClick={() => !isEditing && onSelect()}
@@ -178,7 +196,7 @@ function SessionItem({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 opacity-0 flex-none group-hover:opacity-100 transition-opacity"
+                className="h-6 w-6 -mr-2 opacity-0 flex-none group-hover:opacity-100 transition-opacity"
                 onClick={(e) => e.stopPropagation()}
               >
                 <MoreHorizontal className="h-3 w-3" />
@@ -358,6 +376,12 @@ export function ChatInterface() {
 
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
+  const [selectedModel, setSelectedModel] =
+    React.useState<Model>(DEFAULT_MODEL);
+  const [modelSelectorOpen, setModelSelectorOpen] = React.useState(false);
+
+  // Modelos agrupados por proveedor
+  const modelGroups = React.useMemo(() => getModelsByProvider(), []);
 
   // Agrupar sesiones por fecha
   const groupedSessions = React.useMemo(() => {
@@ -419,6 +443,7 @@ export function ChatInterface() {
       taigaUrl: taigaUrl,
       sessionId: activeSessionId,
       user,
+      model: selectedModel.id,
     },
     onFinish: (assistantMessage) => {
       // Persistir mensajes cuando termina el streaming
@@ -526,7 +551,7 @@ export function ChatInterface() {
       {/* Sidebar */}
       <aside
         className={`
-          fixed inset-y-0 left-0 z-50 w-72 bg-muted/50 transform transition-transform duration-200 ease-in-out
+          fixed inset-y-0 left-0 z-50 w-72 bg-sidebar transform transition-transform duration-200 ease-in-out
           lg:relative lg:translate-x-0
           ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
         `}
@@ -535,8 +560,7 @@ export function ChatInterface() {
           {/* Header del sidebar */}
           <div className="p-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Bot className="h-6 w-6 text-primary" />
+              <div className="flex items-center gap-2 mx-auto">
                 <span className="font-semibold">Taiga AI</span>
               </div>
               <Button
@@ -557,7 +581,7 @@ export function ChatInterface() {
               className="w-full justify-start"
               onClick={handleNewChat}
             >
-              <EditIcon className="-ml-2" />
+              <EditIcon />
               Nueva conversación
             </Button>
           </div>
@@ -685,7 +709,6 @@ export function ChatInterface() {
             <Menu className="h-5 w-5" />
           </Button>
           <div className="flex items-center gap-2">
-            <Bot className="h-5 w-5 text-primary" />
             <span className="font-semibold">Taiga AI</span>
           </div>
           <Button variant="ghost" size="icon" onClick={handleNewChat}>
@@ -758,6 +781,80 @@ export function ChatInterface() {
               className="min-h-13"
             />
             <PromptInputFooter>
+              {/* Model Selector */}
+              <ModelSelector
+                open={modelSelectorOpen}
+                onOpenChange={setModelSelectorOpen}
+              >
+                <ModelSelectorTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-2 text-muted-foreground hover:text-foreground"
+                  >
+                    <ModelSelectorLogo provider={selectedModel.provider} />
+                    <span className="inline">{selectedModel.name}</span>
+                    <span className="text-xs opacity-60">
+                      {selectedModel.costMultiplier}x
+                    </span>
+                    <ChevronsUpDown className="h-3 w-3 opacity-50" />
+                  </Button>
+                </ModelSelectorTrigger>
+                <ModelSelectorContent>
+                  <ModelSelectorInput placeholder="Buscar modelo..." />
+                  <ModelSelectorList className="style-scrollbar">
+                    <ModelSelectorEmpty>
+                      No se encontraron modelos.
+                    </ModelSelectorEmpty>
+                    {modelGroups.map((group) => (
+                      <ModelSelectorGroup
+                        key={group.provider}
+                        heading={
+                          <div className="flex items-center gap-2">
+                            <ModelSelectorLogo provider={group.provider} />
+                            <span className="capitalize">{group.provider}</span>
+                          </div>
+                        }
+                      >
+                        {group.models.map((model) => (
+                          <ModelSelectorItem
+                            key={model.id}
+                            onSelect={() => {
+                              setSelectedModel(model);
+                              setModelSelectorOpen(false);
+                            }}
+                            disabled={model.disabled}
+                            className="flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Check
+                                className={`h-4 w-4 ${
+                                  selectedModel.id === model.id
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                }`}
+                              />
+                              <ModelSelectorName>
+                                {model.name}
+                              </ModelSelectorName>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {model.costMultiplier}x
+                            </span>
+                          </ModelSelectorItem>
+                        ))}
+                      </ModelSelectorGroup>
+                    ))}
+                  </ModelSelectorList>
+                  <ModelSelectorSeparator />
+                  <ModelSelectorItem disabled>
+                    <div className="p-2 text-xs text-muted-foreground">
+                      Modelos de pago deshabilitados por seguridad.
+                    </div>
+                  </ModelSelectorItem>
+                </ModelSelectorContent>
+              </ModelSelector>
+
               <div className="flex-1" />
               <PromptInputSubmit
                 status={status === "streaming" ? "streaming" : "ready"}
