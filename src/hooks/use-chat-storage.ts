@@ -3,6 +3,38 @@
 import { useState, useEffect, useCallback } from "react";
 
 // ============================================
+// Tipos para partes de mensajes (compatibles con use-chat)
+// ============================================
+
+export type StoredTextPart = {
+  type: "text";
+  text: string;
+};
+
+export type StoredReasoningPart = {
+  type: "reasoning";
+  text: string;
+};
+
+export type StoredToolCallPart = {
+  type: `tool-${string}`;
+  toolName: string;
+  input: Record<string, unknown>;
+  output?: unknown;
+  state:
+    | "input-streaming"
+    | "input-available"
+    | "output-available"
+    | "output-error";
+  errorText?: string;
+};
+
+export type StoredMessagePart =
+  | StoredTextPart
+  | StoredReasoningPart
+  | StoredToolCallPart;
+
+// ============================================
 // Tipos
 // ============================================
 
@@ -10,6 +42,7 @@ export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
+  parts?: StoredMessagePart[];
   timestamp: Date;
   isLoading?: boolean;
   isError?: boolean;
@@ -76,6 +109,7 @@ function deserializeState(json: string): ChatStorageState {
           id: string;
           role: "user" | "assistant";
           content: string;
+          parts?: StoredMessagePart[];
           timestamp: string;
           isLoading?: boolean;
           isError?: boolean;
@@ -86,6 +120,7 @@ function deserializeState(json: string): ChatStorageState {
         updatedAt: new Date(session.updatedAt),
         messages: session.messages.map((msg) => ({
           ...msg,
+          parts: msg.parts || [{ type: "text" as const, text: msg.content }],
           timestamp: new Date(msg.timestamp),
         })),
       }),
