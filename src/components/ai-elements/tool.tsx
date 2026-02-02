@@ -68,7 +68,7 @@ export const getStatusBadge = (status: ToolPart["state"]) => {
   };
 
   return (
-    <Badge className="gap-1.5 rounded-full text-xs" variant="secondary">
+    <Badge className="gap-1.5 rounded-full text-sm" variant="secondary">
       {icons[status]}
       {labels[status]}
     </Badge>
@@ -122,7 +122,7 @@ export type ToolInputProps = ComponentProps<"div"> & {
 
 export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
   <div className={cn("space-y-2 overflow-hidden", className)} {...props}>
-    <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+    <h4 className="font-medium text-muted-foreground text-sm uppercase tracking-wide">
       Parámetros
     </h4>
     <div className="rounded-md bg-muted/50">
@@ -166,12 +166,12 @@ export const ToolOutput = ({
 
   return (
     <div className={cn("space-y-2", className)} {...props}>
-      <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+      <h4 className="font-medium text-muted-foreground text-sm uppercase tracking-wide">
         {errorText ? "Error" : "Resultados"}
       </h4>
       <div
         className={cn(
-          "overflow-x-auto rounded-md text-xs [&_table]:w-full",
+          "overflow-x-auto rounded-md text-sm [&_table]:w-full",
           errorText
             ? "bg-destructive/10 text-destructive"
             : "bg-muted/50 text-foreground",
