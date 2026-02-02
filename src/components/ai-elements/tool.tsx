@@ -68,7 +68,7 @@ export const getStatusBadge = (status: ToolPart["state"]) => {
   };
 
   return (
-    <Badge className="gap-1.5 rounded-full text-sm" variant="secondary">
+    <Badge className="gap-1.5 rounded-full text-xs" variant="outline">
       {icons[status]}
       {labels[status]}
     </Badge>
