@@ -1062,10 +1062,73 @@ export async function POST(request: NextRequest) {
         if (deltaContent) {
           await writer.write(
             encoder.encode(
-              `data: ${JSON.stringify({ content: deltaContent })}\n\n`,
+              `data: ${JSON.stringify({ type: "text", content: deltaContent })}\n\n`,
             ),
           );
         }
+      } catch {
+        // Ignorar errores de escritura si el stream se cerró
+      }
+    });
+
+    // Escuchar razonamiento (chain of thought)
+    session.on("assistant.reasoning_delta", async (event) => {
+      if (isComplete) return;
+      try {
+        const deltaContent = event.data?.deltaContent || "";
+        if (deltaContent) {
+          await writer.write(
+            encoder.encode(
+              `data: ${JSON.stringify({ type: "reasoning", content: deltaContent })}\n\n`,
+            ),
+          );
+        }
+      } catch {
+        // Ignorar errores de escritura si el stream se cerró
+      }
+    });
+
+    // Escuchar inicio de ejecución de tool
+    session.on("tool.execution_start", async (event) => {
+      if (isComplete) return;
+      try {
+        const toolCallId = event.data?.toolCallId || `tool-${Date.now()}`;
+        const toolName = event.data?.toolName || "unknown";
+        const input = event.data?.arguments || {};
+        await writer.write(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              type: "tool_call_start",
+              toolCallId,
+              toolName,
+              input,
+            })}\n\n`,
+          ),
+        );
+      } catch {
+        // Ignorar errores de escritura si el stream se cerró
+      }
+    });
+
+    // Escuchar resultado de tool
+    session.on("tool.execution_complete", async (event) => {
+      if (isComplete) return;
+      try {
+        const toolCallId = event.data?.toolCallId || "";
+        const success = event.data?.success ?? true;
+        const result = event.data?.result?.content;
+        const error = event.data?.error?.message;
+        await writer.write(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              type: "tool_call_result",
+              toolCallId,
+              result,
+              isError: !success,
+              error: !success ? error : undefined,
+            })}\n\n`,
+          ),
+        );
       } catch {
         // Ignorar errores de escritura si el stream se cerró
       }
