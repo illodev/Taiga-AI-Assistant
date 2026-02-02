@@ -941,7 +941,7 @@ function createTaigaTools(taigaToken: string, taigaUrl: string) {
 }
 
 // ============================================
-// Route Handler
+// Route Handler con Streaming
 // ============================================
 
 export async function POST(request: NextRequest) {
@@ -988,11 +988,11 @@ export async function POST(request: NextRequest) {
     // Crear herramientas con el token y URL de Taiga
     const tools = createTaigaTools(taigaToken, taigaUrl);
 
-    // Crear sesión
+    // Crear sesión con streaming habilitado
     const session = await copilotClient.createSession({
       sessionId: sessionId || `taiga-${Date.now()}`,
-      model: "gpt-4.1",
-      streaming: false,
+      model: "gpt-4o",
+      streaming: true,
       tools,
       systemMessage: {
         mode: "replace",
@@ -1000,35 +1000,126 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    try {
-      // Enviar mensajes previos para dar contexto (excepto el último)
-      const previousMessages = userMessages.slice(0, -1);
-      for (const msg of previousMessages) {
-        if (msg.role === "user") {
-          await session.sendAndWait({ prompt: msg.content }, 30000);
-        }
+    // Enviar mensajes previos para dar contexto (excepto el último)
+    const previousMessages = userMessages.slice(0, -1);
+    for (const msg of previousMessages) {
+      if (msg.role === "user") {
+        await session.sendAndWait({ prompt: msg.content }, 120000); // 2 minutos
+      }
+    }
+
+    // Obtener el último mensaje del usuario
+    const lastMessage = userMessages[userMessages.length - 1];
+
+    // Capturar el cliente para limpieza en el finally del stream
+    const clientToCleanup = copilotClient;
+
+    // Crear un stream de respuesta usando TransformStream para mejor control
+    const encoder = new TextEncoder();
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+
+    // Flag para controlar si ya terminamos
+    let isComplete = false;
+
+    // Función para cerrar el stream de forma segura
+    const closeStream = async () => {
+      if (isComplete) return;
+      isComplete = true;
+
+      try {
+        await writer.write(
+          encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`),
+        );
+      } catch {
+        // Ignorar si ya está cerrado
       }
 
-      // Obtener el último mensaje del usuario
-      const lastMessage = userMessages[userMessages.length - 1];
+      try {
+        await writer.close();
+      } catch {
+        // Ignorar si ya está cerrado
+      }
 
-      // Enviar y esperar respuesta
-      const response = await session.sendAndWait(
-        { prompt: lastMessage.content },
-        60000, // 60 segundos timeout
-      );
+      // Limpiar sesión y cliente
+      try {
+        await session.destroy();
+      } catch {
+        // Ignorar errores al destruir sesión
+      }
+      try {
+        await clientToCleanup.stop();
+      } catch {
+        // Ignorar errores al detener cliente
+      }
+    };
 
-      const assistantMessage =
-        response?.data?.content || "No se pudo obtener una respuesta.";
+    // Configurar listeners para streaming real
+    session.on("assistant.message_delta", async (event) => {
+      if (isComplete) return;
+      try {
+        const deltaContent = event.data?.deltaContent || "";
+        if (deltaContent) {
+          await writer.write(
+            encoder.encode(
+              `data: ${JSON.stringify({ content: deltaContent })}\n\n`,
+            ),
+          );
+        }
+      } catch {
+        // Ignorar errores de escritura si el stream se cerró
+      }
+    });
 
-      return NextResponse.json({
-        message: assistantMessage,
-        sessionId: session.sessionId,
-      });
-    } finally {
-      // Limpiar sesión
-      await session.destroy();
-    }
+    // Escuchar cuando la sesión está idle (respuesta completa)
+    session.on("session.idle", async () => {
+      await closeStream();
+    });
+
+    // Procesar en background
+    (async () => {
+      try {
+        // Enviar mensaje sin esperar (los eventos manejan la respuesta)
+        await session.send({ prompt: lastMessage.content });
+
+        // Timeout de seguridad de 120 segundos
+        setTimeout(async () => {
+          if (!isComplete) {
+            console.warn("Timeout de seguridad alcanzado");
+            await closeStream();
+          }
+        }, 120000);
+      } catch (error) {
+        // Enviar error como parte del stream
+        const errorMessage =
+          error instanceof Error ? error.message : "Error desconocido";
+        console.error("Error en streaming:", error);
+
+        if (!isComplete) {
+          try {
+            await writer.write(
+              encoder.encode(
+                `data: ${JSON.stringify({ error: errorMessage })}\n\n`,
+              ),
+            );
+          } catch {
+            // Ignorar
+          }
+          await closeStream();
+        }
+      }
+    })();
+
+    // Marcar que la limpieza se hará en el stream
+    copilotClient = null;
+
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
   } catch (error) {
     console.error("Error en chat API:", error);
 
@@ -1040,7 +1131,7 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   } finally {
-    // Limpiar cliente Copilot
+    // Limpiar cliente Copilot solo si no se transfirió al stream
     if (copilotClient) {
       try {
         await copilotClient.stop();
