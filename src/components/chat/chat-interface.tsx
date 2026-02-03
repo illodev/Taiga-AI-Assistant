@@ -561,7 +561,7 @@ export function ChatInterface() {
           {/* Header del sidebar */}
           <div className="p-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 mx-auto">
+              <div className="flex items-center gap-2">
                 <span className="font-semibold">Taiga AI</span>
               </div>
               <Button
@@ -576,7 +576,7 @@ export function ChatInterface() {
           </div>
 
           {/* Botón nueva conversación */}
-          <div className="p-4">
+          <div className="p-4 max-lg:hidden">
             <Button
               variant="ghost"
               className="w-full justify-start"
