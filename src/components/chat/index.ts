@@ -1,5 +1,4 @@
 export { ChatInterface } from "./chat-interface";
-export { ChatMessage, type Message as ChatMessageType } from "./chat-message";
 export { ChatInput } from "./chat-input";
 
 // Re-export AI Elements para uso conveniente
