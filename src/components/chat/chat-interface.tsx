@@ -4,12 +4,10 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth/auth-provider";
 import { LoginForm } from "@/components/auth/login-form";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useChatStorage, type ChatSession } from "@/hooks/use-chat-storage";
 import { useChat, type UIMessage, type ToolCallPart } from "@/hooks/use-chat";
 import { Input } from "@/components/ui/input";
 import {
-  Bot,
   LogOut,
   Menu,
   X,
@@ -22,17 +20,12 @@ import {
   Check,
   RefreshCwIcon,
   CopyIcon,
-  StopCircleIcon,
-  ThumbsUpIcon,
-  ThumbsDownIcon,
   EditIcon,
   ChevronsUpDown,
-  Bell,
 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -66,7 +59,7 @@ import {
   ToolInput,
   ToolOutput,
 } from "@/components/ai-elements/tool";
-import { Suggestions, Suggestion } from "@/components/ai-elements/suggestion";
+import { Suggestion } from "@/components/ai-elements/suggestion";
 import {
   ModelSelector,
   ModelSelectorTrigger,
@@ -78,7 +71,6 @@ import {
   ModelSelectorItem,
   ModelSelectorLogo,
   ModelSelectorName,
-  DEFAULT_MODELS,
   DEFAULT_MODEL,
   getModelsByProvider,
   type Model,
@@ -91,7 +83,6 @@ import {
   ReasoningTrigger,
 } from "../ai-elements/reasoning";
 import { Avatar, AvatarFallback, AvatarImage } from "../ui/avatar";
-import Image from "next/image";
 
 // ============================================
 // Ejemplos de prompts
@@ -101,7 +92,6 @@ const EXAMPLE_PROMPTS = [
   "¿Cuáles son mis proyectos?",
   "Muéstrame el estado del sprint actual",
   "Busca historias relacionadas con 'login'",
-  "Crea una historia de usuario para...",
   "¿Cuántas tareas quedan pendientes?",
   "Dame un resumen del proyecto",
   "Dame estadísticas de mis tareas asignadas",
@@ -204,7 +194,7 @@ function SessionItem({
                 <MoreHorizontal className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-42">
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
@@ -219,7 +209,7 @@ function SessionItem({
                   e.stopPropagation();
                   onDelete();
                 }}
-                className="text-destructive focus:text-destructive"
+                variant="destructive"
               >
                 <Trash2 />
                 Eliminar
@@ -262,7 +252,11 @@ function ChatMessageItem({
           switch (part.type) {
             case "text":
               return part.text ? (
-                <MessageResponse key={`${message.id}-${i}`}>
+                <MessageResponse
+                  key={`${message.id}-${i}`}
+                  isAnimating={isStreaming && i === message.parts.length - 1}
+                  mode="streaming"
+                >
                   {part.text}
                 </MessageResponse>
               ) : null;
@@ -272,7 +266,7 @@ function ChatMessageItem({
                 <Reasoning
                   key={`${message.id}-${i}`}
                   className="w-full"
-                  isStreaming={isStreaming}
+                  isStreaming={isStreaming && i === message.parts.length - 1}
                 >
                   <ReasoningTrigger />
                   <ReasoningContent>{part.text}</ReasoningContent>
@@ -311,7 +305,7 @@ function ChatMessageItem({
         {/* {isAssistant &&
           isStreaming &&
           message.parts.length === 0 &&
-          !message.content && <Spinner className="h-5 w-5" />} */}
+          !message.content && <Spinner  />} */}
       </MessageContent>
 
       {/* Acciones del mensaje */}
@@ -548,7 +542,7 @@ export function ChatInterface() {
   );
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-dvh bg-background">
       {/* Sidebar */}
       <aside
         className={`
@@ -570,7 +564,7 @@ export function ChatInterface() {
                 className="lg:hidden"
                 onClick={() => setSidebarOpen(false)}
               >
-                <X className="h-5 w-5" />
+                <X />
               </Button>
             </div>
           </div>
@@ -701,41 +695,41 @@ export function ChatInterface() {
       {/* Contenido principal */}
       <main className="flex-1 flex flex-col min-w-0">
         {/* Header móvil */}
-        <header className="flex items-center justify-between p-4 border-b lg:hidden">
+        <header className="flex items-center justify-between p-4 lg:hidden">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setSidebarOpen(true)}
           >
-            <Menu className="h-5 w-5" />
+            <Menu />
           </Button>
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">Taiga AI</span>
-          </div>
+          <div className="flex items-center gap-2" />
           <Button variant="ghost" size="icon" onClick={handleNewChat}>
-            <Plus className="h-5 w-5" />
+            <Plus />
           </Button>
         </header>
 
         {/* Área de mensajes con componentes de AI Elements */}
         <Conversation className="flex-1">
-          <ConversationContent className="max-w-3xl mx-auto w-full py-16">
+          <ConversationContent className="max-w-3xl mx-auto w-full lg:py-16 py-4 min-h-full">
             {messages.length === 0 ? (
               <ConversationEmptyState
                 icon={<Sparkles className="size-12" />}
                 title="¡Hola! Soy tu asistente de Taiga"
                 description="Puedo ayudarte a gestionar tus proyectos, historias de usuario, tareas y sprints usando lenguaje natural."
+                className="h-full grow"
               >
-                <div className="mt-6 space-y-4 w-full">
-                  <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center">
-                    {EXAMPLE_PROMPTS.map((prompt, index) => (
-                      <Suggestion
-                        key={index}
-                        suggestion={prompt}
-                        onClick={handleSuggestionClick}
-                      />
-                    ))}
+                <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center h-full items-center">
+                  <div className="w-full text-center text-sm text-foreground mb-4">
+                    Prueba con algunos de estos ejemplos:
                   </div>
+                  {EXAMPLE_PROMPTS.map((prompt, index) => (
+                    <Suggestion
+                      key={index}
+                      suggestion={prompt}
+                      onClick={handleSuggestionClick}
+                    />
+                  ))}
                 </div>
               </ConversationEmptyState>
             ) : (
