@@ -1015,24 +1015,31 @@ export async function POST(request: NextRequest) {
     // Crear herramientas con el token y URL de Taiga
     const tools = createTaigaTools(taigaToken, taigaUrl);
 
-    // Crear sesión con streaming habilitado
-    const session = await copilotClient.createSession({
-      sessionId: sessionId || `taiga-${Date.now()}`,
-      model: model || "gpt-4o",
-      streaming: true,
-      tools,
-      systemMessage: {
-        mode: "replace",
-        content: createSystemPrompt(user),
-      },
-    });
+    // Generar ID de sesión consistente para el usuario si no se proporciona
+    const effectiveSessionId = sessionId || `taiga-${Date.now()}`;
 
-    // Enviar mensajes previos para dar contexto (excepto el último)
-    const previousMessages = userMessages.slice(0, -1);
-    for (const msg of previousMessages) {
-      if (msg.role === "user") {
-        await session.sendAndWait({ prompt: msg.content }, 120000); // 2 minutos
-      }
+    // Intentar resumir sesión existente o crear una nueva
+    let session;
+    try {
+      // Intentar resumir la sesión existente (preserva el contexto)
+      session = await copilotClient.resumeSession(effectiveSessionId, {
+        streaming: true,
+        tools,
+      });
+      console.log(`Sesión ${effectiveSessionId} resumida exitosamente`);
+    } catch {
+      // La sesión no existe, crear una nueva
+      console.log(`Creando nueva sesión: ${effectiveSessionId}`);
+      session = await copilotClient.createSession({
+        sessionId: effectiveSessionId,
+        model: model || "gpt-4o",
+        streaming: true,
+        tools,
+        systemMessage: {
+          mode: "replace",
+          content: createSystemPrompt(user),
+        },
+      });
     }
 
     // Obtener el último mensaje del usuario
@@ -1068,12 +1075,8 @@ export async function POST(request: NextRequest) {
         // Ignorar si ya está cerrado
       }
 
-      // Limpiar sesión y cliente
-      try {
-        await session.destroy();
-      } catch {
-        // Ignorar errores al destruir sesión
-      }
+      // NO destruir la sesión para poder reanudarla después
+      // Solo detener el cliente (la sesión persiste en disco)
       try {
         await clientToCleanup.stop();
       } catch {
